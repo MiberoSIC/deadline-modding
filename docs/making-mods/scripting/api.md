@@ -1,33 +1,79 @@
 # API
 
-What you want to to might be already implemented. Just Ctrl+F on this page or use the search feature on the wiki.
+What you want to do might be already implemented. Just Ctrl+F on this page or use the search feature on the wiki.
 
 ## Shared globals
+
+### console
+
+```lua
+print("hello world!") --> hello world!
+clear_console() -- clears the console output
+```
+
+### shared
+
+```lua
+
+-- persistent data storage between scripts
+shared.value = 5
+
+-- from another script
+print(shared.value) --> 5
+
+```
 
 ### classes
 
 ```lua
 
--- the timer class
--- it allows you to fire an event once per 5 seconds while running in renderstep
-local timer = Timer.new(5)
-local connection;
+-- the Timer class
+-- allows you to detect when x seconds have passed while running in renderstep
+local interval: number = 5
+local timer = Timer.new(interval)
 
-connection = time.renderstep("my script label", function(delta_time)
+local connection: RBXScriptConnection = time.renderstep("my script label", function(delta_time)
 	if timer:expired() then
 		timer:reset()
-		connection:Disconnect()
 
-		print('5 seconds passed')
+		print(`{interval} has passed`)
 	end
 end)
 
 -- spring class
 -- it's just a spring implementation
---                        mass?: number, force?: number, damping?: number, speed?: number
-local spring = Spring.new(0.8, 40, 6, 1.9)
+local args = {
+	mass = 0.8;
+	force = 40;
+	damping = 6;
+	speed = 1.9;
+}
+local spring = Spring.new(args.mass, args.force, args.damping, args.speed)
 spring:shove(Vector3.new(10, 0, 0))
 spring:update(delta_time)
+
+```
+
+### sharedvars
+
+```lua
+
+-- The game has a list of variables that control the game settings.
+-- sharedvars and sharedvars_descriptions exposes this in a simple API
+-- the game has over 100 changeable settings. Check them to make sure what you might want to do isn't already configurable.
+-- there is another page about this on the wiki
+
+for name, description in pairs(sharedvars_descriptions) do
+    print(name, description) --> prints every sharedvars value
+end
+
+for name, description in pairs(sharedvars) do
+    -- iterating over sharedvars doesn't work because it's a metatable. this does nothing
+    print(name, description) --> nil
+end
+
+sharedvars.chat_tips_enabled = false -- disables chat tips, only works on the server
+print(sharedvars.chat_tips_enabled) --> false
 
 ```
 
@@ -37,25 +83,25 @@ spring:update(delta_time)
 -- Timescale, used internally by the game
 
 -- this is a replacement for RenderStepped. delta_time is multiplied by game speed
-local c = time.renderstep("my script label", function(delta_time)
-
+local connection: RBXScriptConnection = time.renderstep("my connection label", function(delta_time)
+	
 end)
-
-c:Disconnect()
+connection:Disconnect()
 
 -- this is a replacement for Heartbeat. delta_time is multiplied by game speed
 time.heartbeat("my script label", function(delta_time)
 
 end)
 
+ -- fires when timescale changes. Only used at the match ending
 time.local_timescale_changed:Connect(function()
     print('timescale has changed')
-end) -- fires when timescale changes. Only used at the match ending
+end)
 
 time.set_local_timescale(1) -- set local timescale, only used by the client
-time.get_speed() -- gets current game speed
+local current_game_speed: number = time.get_speed()
 
--- this is a replacement for task.delay affected by game_speed
+-- replacement for task.delay, affected by game_speed
 time.delay(5, function()
 
 end)
@@ -64,57 +110,41 @@ end)
 time.wait(5)
 ```
 
-### tags
-
-```lua
-
--- you can access the position and size data of CollectionService tagged instances in your maps with the tags namespace.
--- get_tagged gets tagged instances in workspace (current map)
--- get_all_tagged gets all instances (lets you load maps as models and then spawn them in)
-
-print(tags.get_tags()) --> returns a list of every tag used by the game
-print(tags.get_tagged("_killbox")) --> returns a list of every part tagged with _killbox.
--- parts will have position, name, orientation, position, and size defined
--- everything else only has name at the moment
-
-```
-
 ### instance
 
 ```lua
 
+-- instances are implemented as tables
 -- there is a wrapped luau instance which allows editing most properties of instances
--- returns a metatable with some functions
+-- parts will have position, name, orientation, and size defined
+-- other instance types only have name at the moment
 
-local sound = tags.get_tagged("sound_alarm")[1]
-sound.play() -- for playing sound
-
--- you can also create any instance
-local highlight = create_instance("Highlight")
-highlight.Parent = character
+-- you can create and destroy instances
+local highlight: Highlight = create_instance("Highlight")
+highlight.Parent = tags.get_tagged("shiny_coin")[1]
 highlight.Name = "highlight"
 
--- you can also create sounds specifically directly
-local sound = sound.create()
-
--- cloning instances
-local clone = sound.clone()
-clone.Parent = sound
-clone.destroy()
-
--- works
-sound.Volume = 0.5
-print(sound.get_tags()) --> returns a list of every tag the instance has
+highlight.destroy()
 
 -- method and instance properties don't work
-print(sound.Parent)
+print(highlight.Parent) --> nil
 
--- attributes and tags can be set
-sound.add_tag("tag")
-sound.remove_tag("tag")
+-- sounds can be created directly
+local alarm: Sound = sound.create()
+alarm.Volume = 0.5 -- works
+alarm.play() -- for playing sounds
 
-sound.set_attribute("attribute", true)
-sound.get_attribute("attribute")
+-- instances can be cloned
+local clone: Sound = alarm.clone()
+clone.Parent = tags.get_tagged("speaker")[1]
+
+-- you can parent things to the map directly with get_map_root()
+instance.Parent = get_map_root()
+
+-- you can also get the character folder
+instance.Parent = get_chars_root()
+
+-- this helps with cloned instances that should disappear when the map is unloaded
 
 -- models. You can move entire models with pivot_to
 model.pivot_to(model.get_pivot() * CFrame.Angles(0.1, 0, 0))
@@ -126,73 +156,56 @@ instance.apply_impulse(Vector3.new(0, 0, 0))
 instance.set_network_owner(nil)
 instance.set_network_owner("MyName")
 
--- some util functions
--- you can parent things to the map directly with get_map_root()
-instance.Parent = get_map_root()
-
--- you can also get the character folder
-instance.Parent = get_chars_root()
-
--- this helps with cloned instances that should disappear when the map is unloaded
-
 ```
 
-### sharedvars
+### tags, attributes
 
 ```lua
 
--- The game has a list of variables that control the game settings for different players. They are called in a table called shared state.
--- sharedvars and sharedvars_descriptions exposes this in a simple API
--- the game has over 100 changeable settings. Check them to make sure
--- what you might want to do isn't already configurable.
+-- attributes can be manipulated
+wallet.set_attribute("cash", 210.10)
+print(wallet.get_attribute("cash")) --> 210.10
 
--- there is another page about this on the wiki
+-- the "tags" namespace provides access to tagged instances
+-- get_tags returns a list of all tags in the game
+local all_tags: {string} = tags.get_tags()
 
-for name, description in pairs(sharedvars_descriptions) do
-    print(name, description) --> prints every sharedvars value
+-- get_all_tagged gets all tagged instances in the game (also lets you load maps as models and then spawn them in)
+local data_folder: Folder = tags.get_all_tagged("data_folder")[1]
+
+-- get_tagged gets tagged instances in the workspace (current map)
+local all_explosives: {Instance} = tags.get_tagged("explosive")
+local bomb: Instance = tags.get_tagged("bomb")[1]
+
+-- instance.get_tags returns a list of the instance's tags
+local bomb_tags: {string} = bomb.get_tags()
+
+-- an instance's tags can be manipulated
+local function defuse_bomb()
+bomb.remove_tag("bomb")
+bomb.add_tag("defused_bomb")
+
+bomb.set_attribute("can_explode", false)
 end
 
-for name, description in pairs(sharedvars) do
-    -- iterating over sharedvars doesn't work because it's a metatable
-    -- this will do nothing
-    print(name, description)
-end
-
-sharedvars.chat_tips_enabled = false -- disables chat tips, only works on the server
-print(sharedvars.chat_tips_enabled) -- false
-
-```
-
-### shared
-
-```lua
-
--- this is just persistent script storage
-shared.value = 5
-
--- from another script
-print(shared.value) --> 5
-
-```
-
-### console
-
-```lua
-print("hello world") -- self explanatory
-clear_console() -- clears the console output
 ```
 
 ### query
 
 ```lua
--- API for spacial queries, etc
+
+-- API for spatial queries (raycasts, shapecasts, etc.)
+
 local raycast_params = query.create_raycast_params()
-raycast_params.filter_descendants_instances({ car })
+raycast_params.filter_descendants_instances({ laser_gun })
 raycast_params.filter_type(Enum.RaycastFilterType.Exclude)
 
--- same returns as workspace.Raycast, just lowercase
-local hit = query.raycast(position, direction * suspension_length, raycast_params)
-print(result.instance.Name)
+-- same returns as workspace.Raycast, fields are just lowercase
+local hit = query.raycast(position, direction * range_of_laser, raycast_params)
+if hit then
+	print(hit.instance.Name)
+end
+
 ```
 
 ## Server globals
@@ -200,32 +213,44 @@ print(result.instance.Name)
 ### require
 
 ```lua
--- sets the domain for all require() calls
-set_require_domain("https://raw.githubusercontent.com/blackshibe/deadline-insitux-core-scripts/master/")
 
--- actually requires https://raw.githubusercontent.com/blackshibe/deadline-insitux-core-scripts/master/luau/server/gamemode_setup.lua
+-- sets the domain for subsequent require() calls
+set_require_domain("mywebsite.com/folder/modules/")
+
+-- require() argument is appended to domain. this becomes the target web address
+require("fancymodule.lua") --> executes contents of ("mywebsite.com/folder/modules/" .. "fancymodule.lua")
+
+-- example: contents of file at address "yoursite.com/helloworld.lua"
+	shared.new_value = 10
+	print("hello world!")
+
+set_require_domain("yoursite.com/")
+require("helloworld.lua") -- loads "yoursite.com/helloworld.lua" --> hello world!
+print(shared.new_value) --> 10
+
+-- you can run code from external sites like github
+set_require_domain("https://raw.githubusercontent.com/blackshibe/deadline-insitux-core-scripts/master/")
 require("luau/server/gamemode_setup.lua")
 require("luau/server/vip_command_bot.lua")
+
 ```
 
 ### map
 
 ```lua
 
--- ServerMap - for managing the maps
-
 map.set_map("shipment") -- changes the map immediately, kills all players
-map.set_preset("shipment") -- changes the preset. available presets are in config.lighting_presets
+map.set_preset("shipment") -- changes the lighting preset. available presets are in config.lighting_presets
 
--- run_vote uses config.maps.MAP_CONFIGURATION. You can add custom entries there
-local voted_map = map.run_vote() -- runs a vote for a random map. returns a game config for that map
-map.set_map_from_config(config.maps.MAP_CONFIGURATION[voted_map]); -- sets the map, gamemode, and time from a config
+-- run_vote gets candidates from config.maps.MAP_CONFIGURATION. You can add custom entries there
+local voted_map = map.run_vote() -- runs a vote for a random map. returns the key of the map's configuration
+map.set_map_from_config(config.maps.MAP_CONFIGURATION[voted_map]); -- sets the map, gamemode, and time
 
 -- can also just do this
 map.set_map_from_config(config.maps.MAP_CONFIGURATION.shipment_01)
 
 map.set_time(10) -- sets the time 10AM (not including sharedvars.sv_time_offset)
-sharedvars.sv_time_offset = 10 -- moves the time by 10 hours
+sharedvars.sv_time_offset = 10 -- changes the time by 10 hours
 
 -- show available maps
 for name, value in map.get_maps() do
@@ -238,28 +263,29 @@ end
 
 ```lua
 
-gamemode.set_gamemode("koth") -- sets the gamemode
-gamemode.force_set_gamemode("koth") -- sets the gamemode without changing the map(?)
+gamemode.set_gamemode("koth") -- sets the gamemode if there currently is none
+gamemode.force_set_gamemode("koth") -- overrides current gamemode
 
 -- show available gamemodes
 for name in gamemode.available_gamemodes do
     print(name)
 end
 
+ -- fires when a game ends
 gamemode.finished:Connect(function(avoid_resetting_map)
-end) -- fires when a game ends
-
+end)
+ -- fires when a game starts
 gamemode.started:Connect(function()
-end) -- fires when a game starts
+end)
 
 ```
 
-### chat, text
+### chat, notifications
 
 ```lua
 
--- ChatManager - for managing the chat
-chat.player_chatted:Connect(function(sender, channel, content)
+-- fires whenever a player sends a chat message
+chat.player_chatted:Connect(function(sender: string, channel: string, content: string)
 	local command = content:split(" ")[1]
 	local first_letter = command:sub(1, 1)
 
@@ -279,14 +305,14 @@ chat.set_spawning_disabled_reason("Reason why spawning is disabled") --> when pl
 sharedvars.sv_spawning_enabled = false
 
 -- sends an ingame notification text to players
-chat.send_ingame_notification("Hello world")
+chat.send_ingame_notification("Hello everyone")
 
 -- lol
 sound.play_sick_riff()
 
 ```
 
-### players
+### players, player, weapons
 
 ```lua
 
@@ -330,7 +356,7 @@ print(player.get_team()) --> attacker
 player.spawn() -- spawns the player if they are not already spawned
 player.respawn() -- force respawns the player, even if they are already spawned
 
--- player id is unique, userid is userid
+-- player_id is unique, id is userid
 print(player.id)
 print(player.player_id)
 
@@ -346,13 +372,13 @@ print(player.get_animation_speed())
 player.set_speed(5)
 player.set_jump_multiplier(1)
 player.set_health(200)
-player.set_initial_health(200) -- doesn't work immediately
+player.set_initial_health(200) -- applies when player spawns
 player.set_camera_mode("Freecam")
-player.set_model("orchids_pbr_set")
-player.ban_from_server() -- works same as votekicking someone
+player.set_model("orchids_pbr_set") -- can also be "default" or "orchids_shark_set"
+player.ban_from_server() -- works the same as votekicking someone
 player.refill_ammo()
 
-print(player.get_active_slot())
+print(player.get_active_slot()) -- "primary", "secondary", "throwable1", "throwable2", or nil
 player.equip_weapon("secondary", true) -- immediately forces the player to equip their secondary
 player.equip_weapon("throwable1") -- forces the player to switch to their 1st grenade
 
@@ -371,7 +397,7 @@ on_player_left:Connect(function(name)
 	print("player left:", name)
 end)
 
-on_player_died:Connect(function(name, position, killer_data, stats_counted)
+on_player_died:Connect(function(name: string, position: Vector3, killer_data, stats_counted: boolean)
 	-- mostly same data the game uses
 
 	print(name, "died to", killer_data.type) -- can be burning, drowning, firearm, grenade, map_reset, other, reset
